@@ -1,0 +1,83 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import urllib.request
+import re
+
+def lookup_mac():
+    mac_input = entry_mac.get().strip()
+    
+    # Strip everything except hex characters to validate the OUI length
+    clean_mac = re.sub(r'[^a-fA-F0-9]', '', mac_input)
+    
+    if len(clean_mac) < 6:
+        messagebox.showerror("Input Error", "Invalid MAC Address.\nPlease enter at least 6 hex characters.")
+        return
+        
+    btn_lookup.config(state=tk.DISABLED)
+    lbl_status.config(text="Querying IEEE Database...", fg="#e67e22")
+    root.update()
+
+    try:
+        # Querying a public MAC vendor API
+        url = f"https://api.macvendors.com/{mac_input}"
+        # Setting a user-agent to prevent API blocking
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        
+        with urllib.request.urlopen(req) as response:
+            vendor = response.read().decode('utf-8')
+            
+        lbl_vendor_val.config(text=vendor)
+        lbl_oui_val.config(text=clean_mac[:6].upper())
+        lbl_status.config(text="Lookup Successful", fg="#27ae60")
+        
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            lbl_vendor_val.config(text="Vendor Not Found (Private OUI?)")
+            lbl_oui_val.config(text=clean_mac[:6].upper())
+            lbl_status.config(text="Completed", fg="#7f8c8d")
+        else:
+            lbl_status.config(text="API Rate Limit Hit", fg="#c0392b")
+            messagebox.showwarning("API Limit", "Please wait 2 seconds between lookups.")
+    except Exception as e:
+        messagebox.showerror("Network Error", f"Failed to connect: {str(e)}")
+        lbl_status.config(text="Lookup Failed", fg="#c0392b")
+    finally:
+        btn_lookup.config(state=tk.NORMAL)
+
+# --- Tkinter GUI Layout ---
+root = tk.Tk()
+root.title("NOC Toolkit - MAC Vendor Lookup")
+root.geometry("400x280")
+root.resizable(False, False)
+
+frame = ttk.Frame(root, padding="20")
+frame.pack(fill=tk.BOTH, expand=True)
+
+lbl_title = tk.Label(frame, text="Layer 2 MAC/OUI Lookup", font=("Helvetica", 13, "bold"))
+lbl_title.grid(row=0, column=0, columnspan=2, pady=(0, 15), sticky="w")
+
+lbl_instruction = tk.Label(frame, text="Enter MAC Address (e.g., 00:1A:2B:3C:4D:5E):", font=("Helvetica", 9), fg="#555")
+lbl_instruction.grid(row=1, column=0, columnspan=2, pady=(0, 5), sticky="w")
+
+entry_mac = ttk.Entry(frame, width=28, font=("Helvetica", 11))
+entry_mac.grid(row=2, column=0, columnspan=2, pady=(0, 15), sticky="w")
+
+btn_lookup = tk.Button(frame, text="Identify Hardware Vendor", command=lookup_mac, bg="#2c3e50", fg="white", font=("Helvetica", 9, "bold"))
+btn_lookup.grid(row=3, column=0, columnspan=2, pady=(0, 20), ipadx=10, sticky="w")
+
+lbl_oui_label = tk.Label(frame, text="24-bit OUI:", font=("Helvetica", 10))
+lbl_oui_label.grid(row=4, column=0, sticky="w")
+
+lbl_oui_val = tk.Label(frame, text="-", font=("Helvetica", 10, "bold"))
+lbl_oui_val.grid(row=4, column=1, sticky="w")
+
+lbl_vendor_label = tk.Label(frame, text="Manufacturer:", font=("Helvetica", 10))
+lbl_vendor_label.grid(row=5, column=0, sticky="w", pady=5)
+
+lbl_vendor_val = tk.Label(frame, text="-", font=("Helvetica", 10, "bold"), fg="#2980b9")
+lbl_vendor_val.grid(row=5, column=1, sticky="w", pady=5)
+
+lbl_status = tk.Label(frame, text="Ready", font=("Helvetica", 9, "italic"), fg="#555")
+lbl_status.grid(row=6, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+root.mainloop()
